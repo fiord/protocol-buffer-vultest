@@ -38,6 +38,7 @@ def counter():
         
         # INTENTIONAL SQL INJECTION VULNERABILITY - for testing scanners
         # DO NOT USE IN PRODUCTION
+        # Note: Database connection is also not properly managed (no try-finally)
         conn = sqlite3.connect('scores.db')
         cursor = conn.cursor()
         
@@ -75,4 +76,6 @@ def counter():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    # Debug mode and 0.0.0.0 host are for testing only
+    # DO NOT use these settings in production
     app.run(debug=True, host='0.0.0.0', port=5000)
