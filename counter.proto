@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package counter;
+
+message CounterRequest {
+  string username = 1;
+  int32 next_score = 2;
+}
+
+message CounterResponse {
+  string username = 1;
+  int32 current_score = 2;
+  string message = 3;
+}
