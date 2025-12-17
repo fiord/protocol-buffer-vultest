@@ -89,10 +89,8 @@
             <input type="text" id="username" placeholder="Enter username" value="testuser">
         </div>
         
-        <div class="input-group">
-            <label for="nextScore">Next Score:</label>
-            <input type="number" id="nextScore" value="1">
-        </div>
+        <!-- Hidden field for next score - auto-increments after each request -->
+        <input type="hidden" id="nextScore" value="1">
         
         <button onclick="incrementCounter()">Increment Counter</button>
         
@@ -101,7 +99,7 @@
         
         <div class="info">
             <strong>⚠️ Security Notice:</strong> This application intentionally contains SQL injection vulnerabilities for testing security scanners. 
-            The username field is vulnerable to SQL injection. You can modify the "Next Score" to any large number.
+            The username field is vulnerable to SQL injection. Security testers can intercept and modify the Protocol Buffer request to set arbitrary score values.
         </div>
     </div>
 
