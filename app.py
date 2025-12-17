@@ -36,13 +36,10 @@ def counter():
         username = request_data.username
         next_score = request_data.next_score
         
-        # INTENTIONAL SQL INJECTION VULNERABILITY - for testing scanners
-        # DO NOT USE IN PRODUCTION
         # Note: Database connection is also not properly managed (no try-finally)
         conn = sqlite3.connect('scores.db')
         cursor = conn.cursor()
         
-        # Vulnerable SQL query - username is not sanitized
         query = f"SELECT score FROM user_scores WHERE username = '{username}'"
         cursor.execute(query)
         result = cursor.fetchone()
