@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocol Buffer Counter Test</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .input-group {
+            margin: 20px 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .score-display {
+            text-align: center;
+            font-size: 48px;
+            color: #4CAF50;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .message {
+            text-align: center;
+            color: #666;
+            margin-top: 10px;
+            min-height: 20px;
+        }
+
+        .info {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .info strong {
+            color: #d32f2f;
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Protocol Buffer Counter</h1>
+
+        <div class="input-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" placeholder="Enter username" value="testuser">
+        </div>
+
+        <!-- Hidden field for next score - auto-increments after each request -->
+        <input type="hidden" id="nextScore" value="1">
+
+        <button onclick="incrementCounter()">Increment Counter</button>
+
+        <div class="score-display" id="scoreDisplay">0</div>
+        <div class="message" id="message"></div>
+    </div>
+
+    <script>
+        let currentScore = 0;
+
+        // Simple Protocol Buffer encoder for CounterRequest
+        function encodeCounterRequest(username, nextScore) {
+            // Protocol Buffer wire format encoding
+            // Field 1 (username): tag = (1 << 3) | 2 = 10 (0x0A)
+            // Field 2 (next_score): tag = (1 << 3) | 0 = 16 (0x10)
+
+            const usernameBytes = new TextEncoder().encode(username);
+            const usernameLength = usernameBytes.length;
+
+            // Calculate total size
+            let buffer = [];
+
+            // Field 1: username (string)
+            buffer.push(0x0A); // tag
+            buffer.push(usernameLength); // length
+            for (let i = 0; i < usernameBytes.length; i++) {
+                buffer.push(usernameBytes[i]);
+            }
+
+            // Field 2: next_score (int32)
+            buffer.push(0x10); // tag
+            // Encode varint
+            let value = nextScore;
+            while (value > 127) {
+                buffer.push((value & 0x7F) | 0x80);
+                value >>>= 7;
+            }
+            buffer.push(value & 0x7F);
+
+            return new Uint8Array(buffer);
+        }
+
+        // Simple Protocol Buffer decoder for CounterResponse
+        function decodeCounterResponse(buffer) {
+            const data = new Uint8Array(buffer);
+            let pos = 0;
+            let username = '';
+            let currentScore = 0;
+            let message = '';
+
+            while (pos < data.length) {
+                const tag = data[pos++];
+                const fieldNum = tag >>> 3;
+                const wireType = tag & 0x07;
+
+                if (wireType === 2) { // Length-delimited (string)
+                    let length = 0;
+                    let shift = 0;
+                    while (true) {
+                        const b = data[pos++];
+                        length |= (b & 0x7F) << shift;
+                        if ((b & 0x80) === 0) break;
+                        shift += 7;
+                    }
+
+                    const bytes = data.slice(pos, pos + length);
+                    const str = new TextDecoder().decode(bytes);
+                    pos += length;
+
+                    if (fieldNum === 1) username = str;
+                    else if (fieldNum === 3) message = str;
+                } else if (wireType === 0) { // Varint (int32)
+                    let value = 0;
+                    let shift = 0;
+                    while (true) {
+                        const b = data[pos++];
+                        value |= (b & 0x7F) << shift;
+                        if ((b & 0x80) === 0) break;
+                        shift += 7;
+                    }
+
+                    if (fieldNum === 2) currentScore = value;
+                }
+            }
+
+            return { username, current_score: currentScore, message };
+        }
+
+        async function incrementCounter() {
+            const username = document.getElementById('username').value;
+            const nextScore = parseInt(document.getElementById('nextScore').value);
+
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+
+            try {
+                // Encode Protocol Buffer message
+                const buffer = encodeCounterRequest(username, nextScore);
+
+                // Send request
+                const response = await fetch('/api/counter', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-protobuf'
+                    },
+                    body: buffer
+                });
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${error}`);
+                }
+
+                // Decode response
+                const responseBuffer = await response.arrayBuffer();
+                const counterResponse = decodeCounterResponse(responseBuffer);
+
+                // Update display
+                currentScore = counterResponse.current_score;
+                document.getElementById('scoreDisplay').textContent = currentScore;
+                document.getElementById('message').textContent = counterResponse.message;
+
+                // Increment next score for convenience
+                document.getElementById('nextScore').value = currentScore + 1;
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('message').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>
